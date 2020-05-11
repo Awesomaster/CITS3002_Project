@@ -7,4 +7,15 @@ int main(int argc, char **argv) {
 
     char *adjacentStations = argv; // we will be using all arguments argv[3:argc]
 
+    /* pseudo code
+    if (station in adjacentStations) {
+        return nextTrip
+    } else {
+        findStation (by looking at adjacent stations)
+        addNewStationsFound (to address book)
+        findRoute to station
+        return stepsOfRoute
+    }
+
+    */
 }
