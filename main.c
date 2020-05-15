@@ -18,6 +18,11 @@
 #define MAXADJACENT 20 // Max amount of adjacent stations
 #define LISTENQ 4 // Max number of client connections
 
+struct station {
+    char name[20];
+    int port;
+}
+
 char* udpSend(int stationPort, char *message) {
     struct sockaddr_in udpOutAddress;
     int udpOutfd;
@@ -82,6 +87,9 @@ int main(int argc, char **argv) {
         position++;
     } 
 
+    struct station stationArray[sizeof(adjacentPorts)];
+    int dictionaryPosition = 0;
+
     // Variabled required for socket connections
     int listenfd, udpfd, maxfd, connfd, externalfd, n, nready;
     fd_set rset;
@@ -119,6 +127,8 @@ int main(int argc, char **argv) {
     // This is to find the name of all adjacent stations
     char broadcastMessage[50];
     strcpy(broadcastMessage, "NAME:");
+    strcat(broadcastMessage, name);
+    strcat(broadcastMessage, ":");
     strcat(broadcastMessage, argv[3]);
     broadcast(adjacentPorts, broadcastMessage);
 
@@ -179,14 +189,26 @@ int main(int argc, char **argv) {
             regexCheck = regcomp(&regex, "NAME", 0);
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "NAME" as a string exists within the UDP message, meaning that they want to know our name 
             char sendingName[50];
+            
             strcpy(sendingName, "IAM:");
             strcat(sendingName, name);
             strcat(sendingName, ":");
-            strcat(sendingName, argv[2]);
+            strcat(sendingName, argv[3]);
             if (regexCheck == 0) { // They are asking for our name
                 printf("Regex Check Success: IAM\n");
-                strtok(buf,":");
+                strtok(buf,":"); // This is required to get to the next tokens 
+
+                // We can add this to our dictionary, meaning by the time all the stations have been created and performed the broadcast, every station will have a complete dictionary of adjacent stations names and ports
+                char returnName[20];
+                strcpy(returnName, strtok(0,":"));
                 int returnPort = atoi(strtok(0,":"));
+                
+                /*
+                stationArray[dictionaryPosition].name = returnName;
+                stationArray[dictionaryPosition].port = returnPort;
+                dictionaryPosition++;
+                */
+
                 udpSend(returnPort, sendingName);
                 //sendto(connfd, sendingName, strlen(sendingName), 0, (struct sockaddr*) &clientAddress, sizeof(clientAddress)); 
                 printf("Replied to NAME request with: %s\n", sendingName);
@@ -206,6 +228,16 @@ int main(int argc, char **argv) {
             if (regexCheck == 0) { // This is a reply meaning that they have given us their name
                 printf("Regex Check Success: NAME\n");
                 printf("This was a name\n");
+
+                /*
+                char incomingName[20];
+                strcpy(incomingName, strtok(0,":"));
+                int incomingPort = atoi(strtok(0,":"));
+                stationArray[dictionaryPosition].name = incomingName;
+                stationArray[dictionaryPosition].port = incomingPort;
+                dictionaryPosition++;
+                */
+                
                 // First you have to run this: strtok(buf, ":");
                 // This is their name: strtok(0, ":");
                 // This is their port: strtok(0, ":");
