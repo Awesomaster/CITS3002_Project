@@ -18,11 +18,6 @@
 #define MAXADJACENT 20 // Max amount of adjacent stations
 #define LISTENQ 4 // Max number of client connections
 
-struct station {
-    char name[20];
-    int port;
-}
-
 char* udpSend(int stationPort, char *message) {
     struct sockaddr_in udpOutAddress;
     int udpOutfd;
@@ -87,8 +82,10 @@ int main(int argc, char **argv) {
         position++;
     } 
 
+    /*
     struct station stationArray[sizeof(adjacentPorts)];
     int dictionaryPosition = 0;
+    */
 
     // Variabled required for socket connections
     int listenfd, udpfd, maxfd, connfd, externalfd, n, nready;
@@ -101,6 +98,20 @@ int main(int argc, char **argv) {
     // Regex variables
     regex_t regex;
     int regexCheck = 0;
+
+    
+    // Printing and Initialising Timetable
+    FILE *fp;
+    char timetableFile[25];
+    char line[100];
+    strcpy(timetableFile, "tt-");
+    strcat(timetableFile, name);
+
+    fp = fopen(timetableFile, "r");
+    while(fgets(line, sizeof(line), fp) != NULL) {
+        fputs(line, stdout);
+    }
+    
 
     // TCP Setup
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
