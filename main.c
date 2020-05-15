@@ -108,14 +108,15 @@ int main(int argc, char **argv) {
                 // Send request to the next server
                 sendto(externalfd, request, strlen(request), 0, (struct sockaddr*) &externalUdpServerAddress, sizeof(externalUdpServerAddress));
 
-                // Reply from UDP server
+                // Reply from UDP server (not sure if this will get fed through to the other udpfd section, if so we will need to do some more fanangling)
                 recvfrom(externalfd, buf, MAXDATASIZE, 0, (struct sockaddr*) &externalUdpServerAddress, sizeof(externalUdpServerAddress));
+                printf("Reply from UDP Request: ");
                 puts(buf);
                 close(externalfd);
 
                 // Reply to TCP connection
                 send(connfd, destinationStation, strlen(destinationStation), 0);
-                printf("Sent\n");
+                printf("Replied to TCP Connection. TCP Over.\n");
                 
                 close(connfd);
                 exit(0);
@@ -123,10 +124,14 @@ int main(int argc, char **argv) {
             close(connfd);
         }
 
+        // UDP Server
         if (FD_ISSET(udpfd, &rset)) {
             clientLen = sizeof(clientAddress);
             printf("%s\n", "String recieved from UDP");
             n = recv(udpfd, buf, MAXDATASIZE, 0);
+            puts(buf);
+            char *reply = "thank you for your message from udp server"
+            sendto(udpfd, reply, sizeof(reply), 0, (struct sockaddr*) &clientAddress, sizeof(clientAddress)); 
         }
     }
 
