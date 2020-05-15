@@ -15,7 +15,7 @@
 
 #include <netinet/in.h>
 
-#define MAXDATASIZE 100
+#define MAXDATASIZE 1028
 
 
 int main(int argc, char **argv) {
@@ -26,23 +26,33 @@ int main(int argc, char **argv) {
     //char **adjacentStations = argv; // we will be using all arguments argv[4:argc]
 
 
-
-    
-    struct addrinfo hints, *res;
+    struct sockaddr_in serverAddress;
     int sockfd;
+    char sendLine[MAXDATASIZE]l, recvLine[MAXDATASIZE];
 
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
+    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol); // Make sure this returns 0 (error check)
 
-    getaddrinfo(NULL, tcpPort, &hints, &res);
+    memset(&serverAddress, 0, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
+    serverAddress.sin_flags = hton(tcpPort); // Here we are performing a host to network transition of the port number for big-endianness
 
-    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    connect(sockfd, (struct sockaddr *) &serverAddress, sizeof(serverAddress));
 
-    bind(sockfd, res->a-_addr, res->ai_addrlen);
+    while(fgets(sendline, strlen(sendline), 0)) {
+        send(sockfd, sendLine, strlen(sendLine), 0);
+
+        if(recv(sockfd, recvLine, MAXDATASIZE, 0) == 0) {
+            perror("The server terminated :P");
+            exit(4);
+        } 
+        printf("%s %s", name, "recived string from server: ");
+        fputs(recvLine, stdout);
+
+    }
+
+    exit(0);
     
-
     /* pseudo code
     if (station in adjacentStations) {
         return nextTrip
