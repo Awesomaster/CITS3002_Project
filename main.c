@@ -15,7 +15,7 @@
 #include <netinet/in.h>
 
 #define MAXDATASIZE 4096 // Max data size
-#define MAXADJACENT 20 // Max amount of adjacent stations
+#define MAXNAMESIZE 20 // Max size of station name
 #define LISTENQ 4 // Max number of client connections
 
 char* udpSend(int stationPort, char *message) {
@@ -38,7 +38,7 @@ char* udpSend(int stationPort, char *message) {
     fflush(stdout);
     sendto(udpOutfd, message, strlen(message), 0, (struct sockaddr*) &udpOutAddress, sizeof(udpOutAddress));
 
-    /*
+    /* WAIT FOR RESPONSE
     printf("Waiting for response from port %i", stationPort);
     
     // Reply from UDP server (not sure if this will get fed through to the other udpfd section, if so we will need to do some more fanangling)
@@ -47,15 +47,16 @@ char* udpSend(int stationPort, char *message) {
     printf("Reply from UDP Request: ");
     puts(buf);
     */
+
     close(udpOutfd);
 
     return buf;
 }
 
 int broadcast(int *adjacentPorts, char *message) {
-    for (int i=0; i<sizeof(adjacentPorts); i++) { // NOTE: Might need to check the sizeof adjacentStations (might need to div by sizeof(int))
+    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int); i++) { // NOTE: Might need to check the sizeof adjacentStations (might need to div by sizeof(int))
         if(adjacentPorts[i] != 0) {
-            printf(udpSend(adjacentPorts[i], message));
+            udpSend(adjacentPorts[i], message);
         }
     }
     return 0;
@@ -73,19 +74,16 @@ int main(int argc, char **argv) {
     int tcpPort = atoi(argv[2]); // port for tcp connection from e.g. http://localhost:port
     int udpPort = atoi(argv[3]); // port for udp for other stations to use to communicate with this station 
     
-    int adjacentPorts[MAXADJACENT];
-    int position = 0;
-    bzero(adjacentPorts, sizeof(adjacentPorts));
-
-    while (argv[position+4][0] != '?') {
-        adjacentPorts[position] = atoi(argv[position+4]);
-        position++;
-    } 
-
-    /*
-    struct station stationArray[sizeof(adjacentPorts)];
+    int adjacentPorts[argc-4];
+    for (int i=0; i<(argc-4); i++) {
+        adjacentPorts[i] = atoi(argv[i+4]);
+    }
+    
+    // Initialising Variables for station name-port dictionary
+    char stationNameArray[argc-4][MAXNAMESIZE];
+    bzero(stationNameArray, sizeof(stationNameArray));
+    int stationPortArray[argc-4];
     int dictionaryPosition = 0;
-    */
 
     // Variabled required for socket connections
     int listenfd, udpfd, maxfd, connfd, externalfd, n, nready;
@@ -99,7 +97,6 @@ int main(int argc, char **argv) {
     regex_t regex;
     int regexCheck = 0;
 
-    
     // Printing and Initialising Timetable
     FILE *fp;
     char timetableFile[25];
@@ -111,7 +108,6 @@ int main(int argc, char **argv) {
     while(fgets(line, sizeof(line), fp) != NULL) {
         fputs(line, stdout);
     }
-    
 
     // TCP Setup
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -133,7 +129,7 @@ int main(int argc, char **argv) {
     // Binding UDP
     bind(udpfd, (struct sockaddr *) &udpServerAddress, sizeof(udpServerAddress));
 
-    printf("%s\n", "Servers running... waiting for connections...");    
+    printf("%s %s\n", name, "is running... waiting for connections...");    
 
     // This is to find the name of all adjacent stations
     char broadcastMessage[50];
@@ -154,6 +150,7 @@ int main(int argc, char **argv) {
 
         nready = select(maxfd, &rset, NULL, NULL, NULL);
         
+        // Incoming TCP Connection
         if (FD_ISSET(listenfd, &rset)) {
             clientLen = sizeof(clientAddress);
             connfd = accept(listenfd, (struct sockaddr *) &clientAddress, &clientAddress);
@@ -165,6 +162,12 @@ int main(int argc, char **argv) {
                 bzero(buf, sizeof(buf));
                 recv(connfd, buf, sizeof(buf),0);
                 printf("%s\n", "String recieved from TCP");
+
+                printf("%s\n", "Adjacent Stations:");
+                for (int i =0; i<(dictionaryPosition); i++) {
+                    printf("%s is on port %i\n", stationNameArray[i], stationPortArray[i]);
+                }
+
                 strtok(buf, "="); // Get rid of everything before the =
                 char *destinationStation = strtok(0, " "); // Get rid of everything after the destination name
                 char *time = "currentTime";
@@ -189,7 +192,7 @@ int main(int argc, char **argv) {
             close(connfd);
         }
 
-        // UDP Server
+        // Incoming UDP Message
         if (FD_ISSET(udpfd, &rset)) {
             printf("%s", "String recieved from UDP: ");
             bzero(buf, sizeof(buf));
@@ -214,11 +217,10 @@ int main(int argc, char **argv) {
                 strcpy(returnName, strtok(0,":"));
                 int returnPort = atoi(strtok(0,":"));
                 
-                /*
-                stationArray[dictionaryPosition].name = returnName;
-                stationArray[dictionaryPosition].port = returnPort;
+                bzero(stationNameArray[dictionaryPosition], sizeof(stationNameArray[dictionaryPosition]));
+                strcpy(stationNameArray[dictionaryPosition], returnName);
+                stationPortArray[dictionaryPosition] = returnPort;
                 dictionaryPosition++;
-                */
 
                 udpSend(returnPort, sendingName);
                 //sendto(connfd, sendingName, strlen(sendingName), 0, (struct sockaddr*) &clientAddress, sizeof(clientAddress)); 
@@ -230,6 +232,9 @@ int main(int argc, char **argv) {
             if (regexCheck == 0) { // They are asking for the path to their destination
                 printf("Regex Check Success: PATH\n");
                 char *reply = "idk yet";
+                int port = 1; // this will be set to the guy it needs to be
+                //reply = findBestPath(broadcast(adjacentPorts, task));
+                //udpSend(port, reply);
                 sendto(connfd, reply, strlen(reply), 0, (struct sockaddr*) &clientAddress, sizeof(clientAddress)); 
             
             } 
@@ -238,16 +243,16 @@ int main(int argc, char **argv) {
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will be a reply
             if (regexCheck == 0) { // This is a reply meaning that they have given us their name
                 printf("Regex Check Success: NAME\n");
-                printf("This was a name\n");
-
-                /*
+                
                 char incomingName[20];
+                strtok(buf, ":");
                 strcpy(incomingName, strtok(0,":"));
                 int incomingPort = atoi(strtok(0,":"));
-                stationArray[dictionaryPosition].name = incomingName;
-                stationArray[dictionaryPosition].port = incomingPort;
+                bzero(stationNameArray[dictionaryPosition], sizeof(stationNameArray[dictionaryPosition]));
+                strcpy(stationNameArray[dictionaryPosition], incomingName);
+                stationPortArray[dictionaryPosition] = incomingPort;
                 dictionaryPosition++;
-                */
+                
                 
                 // First you have to run this: strtok(buf, ":");
                 // This is their name: strtok(0, ":");
