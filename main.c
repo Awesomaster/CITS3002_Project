@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
                         // Look through timetable, from the time to find the next avaliable trip to that destination
                     }
                 }
-                
+
                 if (isAdjacent == 0) {
                     // Here we become a UDP client after we find the port of the station we are trying to get to
                     char request[MAXDATASIZE];
@@ -285,6 +285,15 @@ int main(int argc, char **argv) {
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "PATH" as a string exists within the UDP message, meaning that they want to know how to get somewhere
             if (regexCheck == 0) { // They are asking for the path to their destination
                 printf("Regex Check Success: PATH\n");
+                strtok(buf, ":"); // This is to remove PATH
+                char *destinationStation = strtok(0, ":");
+                char *arriveHere = strtok(0, ":"); // Time it arrives at this station
+                char *firstStep = strtok(0, ":"); // This is the first step in the journey, we can use this to tell if we are finished and other things
+
+                char messageToPassForward[MAXDATASIZE];
+                sprintf(messageToPassForward, "PATH:%s:%i:%s-%s", destinationStation, timetable[j].arrivalTime, name, time);
+                sprintf()
+
                 char *reply = "idk yet";
                 int port = 1; // this will be set to the guy it needs to be
                 //reply = findBestPath(broadcast(adjacentPorts, task));
