@@ -67,7 +67,7 @@ char* udpSend(int stationPort, char *message) {
 // Sends a signal to all adjacent ports with message
 int broadcast(int *adjacentPorts, char *message) {
     printf("You are currently broadcasting to %li station/s\n",(sizeof(adjacentPorts)/sizeof(int)-1));
-    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int)-1; i++) { // NOTE: Might need to check the sizeof adjacentStations (might need to div by sizeof(int))
+    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int)-1; i++) { 
         if(adjacentPorts[i] != 0) {
             udpSend(adjacentPorts[i], message);
         }
@@ -235,6 +235,7 @@ int main(int argc, char **argv) {
                             if (strcmp(timetable[j].destination, destinationStation) == 0) {
                                 if (timetable[j].leaveTime >= timeInt) {
                                     sprintf(finalResult, "You should be able to hop on at stop: %s at %i, arriving at station: %s at %i", timetable[j].stop, timetable[j].leaveTime, timetable[j].destination, timetable[j].arrivalTime);
+                                    break;
                                 }
                             }
                         }
@@ -244,11 +245,21 @@ int main(int argc, char **argv) {
                 
                 if (isAdjacent == 0) {
                     // Here we become a UDP client after we find the port of the station we are trying to get to
-                    char request[100];
+                    char request[MAXDATASIZE];
                     int timeArrivingAtPort = 0;
-                    sprintf(request, "PATH:%s:%s:%s:%s", destinationStation, timeArrivingAtPort, name, time);
-                    
-                    broadcast(adjacentPorts, request); // We ask around for if anyone knows how to get to destination
+                    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int)-1; i++) { 
+                        for (int j = 0; j<timetablePos; j++) {
+                            if (strcmp(timetable[j].destination, stationNameArray[i]) == 0) {
+                                if (timetable[j].leaveTime >= timeInt) {
+                                    sprintf(request, "PATH:%s:%i:%s-%s", destinationStation, timetable[j].arrivalTime, name, time);
+                                    printf("Request sent: %s\n", request);
+                                    break;
+                                }
+                            }
+                        }
+                        udpSend(stationPortArray[i], request);
+                    }
+                    // We dont use broadcast(adjacentPorts, request); since we have special conditions for each station
                 }
 
                 // Reply to TCP connection
@@ -268,35 +279,8 @@ int main(int argc, char **argv) {
             recvfrom(udpfd, buf, MAXDATASIZE, 0, (struct sockaddr*) &clientAddress, sizeof(clientAddress));
             puts(buf);
 
-            // Check the request (using regex)
-            regexCheck = regcomp(&regex, "NAME", 0);
-            regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "NAME" as a string exists within the UDP message, meaning that they want to know our name 
-            if (regexCheck == 0) { // They are asking for our name
-                printf("Regex Check Success: NAME\n");
-                strtok(buf,":"); // This is required to get to the next tokens 
-
-                // We can add this to our dictionary, meaning by the time all the stations have been created and performed the broadcast, every station will have a complete dictionary of adjacent stations names and ports
-                char returnName[20];
-                strcpy(returnName, strtok(0,":"));
-                int returnPort = atoi(strtok(0,":"));
-                
-                // Constructing reply string
-                char sendingName[50];
-                strcpy(sendingName, "IAM:");
-                strcat(sendingName, name);
-                strcat(sendingName, ":");
-                strcat(sendingName, argv[3]);
-
-                bzero(stationNameArray[dictionaryPosition], sizeof(stationNameArray[dictionaryPosition]));
-                strcpy(stationNameArray[dictionaryPosition], returnName);
-                stationPortArray[dictionaryPosition] = returnPort;
-                dictionaryPosition++;
-
-                udpSend(returnPort, sendingName);
-                printf("Replied to NAME request with: %s\n", sendingName);
-            } 
-            
             // ------------------ WIP ------------------
+            // Check the request (using regex)
             regexCheck = regcomp(&regex, "PATH:", 0);
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "PATH" as a string exists within the UDP message, meaning that they want to know how to get somewhere
             if (regexCheck == 0) { // They are asking for the path to their destination
@@ -322,6 +306,33 @@ int main(int argc, char **argv) {
                 */
 
                 sendto(connfd, reply, strlen(reply), 0, (struct sockaddr*) &clientAddress, sizeof(clientAddress)); 
+            } 
+
+            regexCheck = regcomp(&regex, "NAME", 0);
+            regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "NAME" as a string exists within the UDP message, meaning that they want to know our name 
+            if (regexCheck == 0) { // They are asking for our name
+                printf("Regex Check Success: NAME\n");
+                strtok(buf,":"); // This is required to get to the next tokens 
+
+                // We can add this to our dictionary, meaning by the time all the stations have been created and performed the broadcast, every station will have a complete dictionary of adjacent stations names and ports
+                char returnName[20];
+                strcpy(returnName, strtok(0,":"));
+                int returnPort = atoi(strtok(0,":"));
+                
+                // Constructing reply string
+                char sendingName[50];
+                strcpy(sendingName, "IAM:");
+                strcat(sendingName, name);
+                strcat(sendingName, ":");
+                strcat(sendingName, argv[3]);
+
+                bzero(stationNameArray[dictionaryPosition], sizeof(stationNameArray[dictionaryPosition]));
+                strcpy(stationNameArray[dictionaryPosition], returnName);
+                stationPortArray[dictionaryPosition] = returnPort;
+                dictionaryPosition++;
+
+                udpSend(returnPort, sendingName);
+                printf("Replied to NAME request with: %s\n", sendingName);
             } 
 
             regexCheck = regcomp(&regex, "IAM:", 0);
