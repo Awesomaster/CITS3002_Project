@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <regex.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -16,8 +17,18 @@
 
 #define MAXDATASIZE 4096 // Max data size
 #define MAXNAMESIZE 20 // Max size of station name
+#define MAXTIMETABLE 50 // Max number of trips in a timetable
 #define LISTENQ 4 // Max number of client connections
 
+// Structure to place timetable in
+struct Timetable {
+    char destination[MAXNAMESIZE];
+    char stop[MAXNAMESIZE];
+    int leaveTime;
+    int arrivalTime;
+} timetable;
+
+// Send a message to a given port UDP
 char* udpSend(int stationPort, char *message) {
     struct sockaddr_in udpOutAddress;
     int udpOutfd;
@@ -53,8 +64,10 @@ char* udpSend(int stationPort, char *message) {
     return buf;
 }
 
+// Sends a signal to all adjacent ports with message
 int broadcast(int *adjacentPorts, char *message) {
-    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int); i++) { // NOTE: Might need to check the sizeof adjacentStations (might need to div by sizeof(int))
+    printf("You are currently broadcasting to %li station/s\n",(sizeof(adjacentPorts)/sizeof(int)-1));
+    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int)-1; i++) { // NOTE: Might need to check the sizeof adjacentStations (might need to div by sizeof(int))
         if(adjacentPorts[i] != 0) {
             udpSend(adjacentPorts[i], message);
         }
@@ -62,22 +75,26 @@ int broadcast(int *adjacentPorts, char *message) {
     return 0;
 }
 
+// Returns the max of two ints x and y
 int max(int x, int y) {
     if (x>y) return x;
     else return y;
 }
 
-int isAdjacent(char *name, char **namesAdjacent, int length) {
-    for (int i =0; i<(length); i++) {
-        if(strcmp(namesAdjacent[i], name)==0) {
-            return 1;
-        }
-    }
-    return 0;
+// Returns current time in format HHMM as an integer
+int getTime() {
+    int hours, minutes;
+    time_t currentTime = time(NULL);
+    time(&currentTime); 
+    struct tm *localTime = localtime(&currentTime);
+    hours = localTime->tm_hour;
+    minutes = localTime->tm_min;
+    return hours*100+minutes;
 }
 
 int main(int argc, char **argv) {
-    printf("Code is starting\n");
+    printf("Code is starting at %i\n", getTime());
+    ;
     // Variables defined from argv
     char *name = argv[1]; // the spoken name of the station that will be used to refer to the station
     int tcpPort = atoi(argv[2]); // port for tcp connection from e.g. http://localhost:port
@@ -108,14 +125,34 @@ int main(int argc, char **argv) {
 
     // Printing and Initialising Timetable
     FILE *fp;
-    char timetableFile[25];
+    char timetableFileName[MAXNAMESIZE+5];
     char line[100];
-    strcpy(timetableFile, "tt-");
-    strcat(timetableFile, name);
+    struct Timetable timetable[MAXTIMETABLE];
+    memset(timetable, 0, sizeof(timetable));
+    int timetablePos = -1;
+    strcpy(timetableFileName, "tt-");
+    strcat(timetableFileName, name);
 
-    fp = fopen(timetableFile, "r");
+    fp = fopen(timetableFileName, "r");
     while(fgets(line, sizeof(line), fp) != NULL) {
         fputs(line, stdout);
+
+        if (timetablePos >= 0) {
+            char *leaveTimeStr = strtok(line, ",");
+            char *stop = strtok(0, ",");
+            char *arrivalTimeStr = strtok(0, ",");
+            char *destination = strtok(0, ",");
+            destination[strlen(destination)-1]='\0';
+
+            int leaveTime = atoi(strtok(leaveTimeStr, ":"))*100 + atoi(strtok(0, ":"));
+            int arrivalTime = atoi(strtok(arrivalTimeStr, ":"))*100 + atoi(strtok(0, ":"));
+            
+            timetable[timetablePos].leaveTime = leaveTime;
+            timetable[timetablePos].arrivalTime = arrivalTime;
+            strcpy(timetable[timetablePos].stop, stop);
+            strcpy(timetable[timetablePos].destination, destination);
+        }
+        timetablePos++;
         // Here we store the timetable in some better way (preferably a struct made for it, we also need to properly interperit the time in a way that is consistent across the codes)
     }
     fclose(fp);
@@ -145,12 +182,10 @@ int main(int argc, char **argv) {
 
     // This is to find the name of all adjacent stations
     char broadcastMessage[50];
-    strcpy(broadcastMessage, "NAME:");
-    strcat(broadcastMessage, name);
-    strcat(broadcastMessage, ":");
-    strcat(broadcastMessage, argv[3]);
+    sprintf(broadcastMessage, "NAME:%s:%s", name, argv[3]);
     broadcast(adjacentPorts, broadcastMessage);
 
+    // Initialisations for select
     FD_ZERO(&rset);
     maxfd = max(listenfd, udpfd) + 1;
 
@@ -159,7 +194,6 @@ int main(int argc, char **argv) {
     for(;;) {
         FD_SET(listenfd, &rset);
         FD_SET(udpfd, &rset);
-
         nready = select(maxfd, &rset, NULL, NULL, NULL);
         
         // Incoming TCP Connection
@@ -174,7 +208,7 @@ int main(int argc, char **argv) {
                 bzero(buf, sizeof(buf));
                 recv(connfd, buf, sizeof(buf),0);
                 printf("%s: ", "String recieved from TCP");
-                puts(buf);
+                //puts(buf);
 
                 printf("%s\n", "Adjacent Stations:");
                 for (int i =0; i<(dictionaryPosition); i++) {
@@ -185,31 +219,37 @@ int main(int argc, char **argv) {
                 char *destinationStation = strtok(0, " "); // Get rid of everything after the destination name
                 printf("TOOT TOOT, DESTINATION: %s\n", destinationStation);
                 
-                char *time = "currentTime";
-                char *finalResult = ""; // This will be the time of arrival and path to destination
+                char time[4];
+                int timeInt = getTime();
+                sprintf(time, "%d", timeInt);
+
+                char finalResult[MAXDATASIZE]; // This will be the time of arrival and path to destination
 
                 // This might be able to be done in a seperate function and probably should because we will need to send the intial request there but this is similar to the code that wwill need to happpen if a particular stop doesnt have the destination station adjacent
                 // is destinationStation in stationNameArray: IF YES = find next trip there, IF NO = broadcast
-                for (int i =0; i<(dictionaryPosition); i++) {
-                    if(strcmp(stationNameArray[i], destinationStation)==0) {
-                        printf("oh this should be easy\n");
+                int isAdjacent = 0;
+                for (int i =0; i<dictionaryPosition; i++) {
+                    if(strcmp(stationNameArray[i], destinationStation) == 0) {
+                        isAdjacent = 1;
+                        for (int j = 0; j<timetablePos; j++) {
+                            if (strcmp(timetable[j].destination, destinationStation) == 0) {
+                                if (timetable[j].leaveTime >= timeInt) {
+                                    sprintf(finalResult, "You should be able to hop on at stop: %s at %i, arriving at station: %s at %i", timetable[j].stop, timetable[j].leaveTime, timetable[j].destination, timetable[j].arrivalTime);
+                                }
+                            }
+                        }
                         // Look through timetable, from the time to find the next avaliable trip to that destination
                     }
                 }
-
-
-                // Here we become a UDP client after we find the port of the station we are trying to get to
-                char request[100];
-                strcpy(request, "PATH:");
-                strcat(request, destinationStation);
-                strcat(request, ":");
-                strcat(request, time); // This will be the message that we send to the next station
-                strcat(request, ":");
-                strcat(request, name); // We add our station, so that we can build a stack that we can deconstruct to figrue out how far along the path we are
-                strcat(request, "-");
-                strcat(request, time); // We add the time you leave this stop
-
-                broadcast(adjacentPorts, request); // We ask around for if anyone knows how to get to destination
+                
+                if (isAdjacent == 0) {
+                    // Here we become a UDP client after we find the port of the station we are trying to get to
+                    char request[100];
+                    int timeArrivingAtPort = 0;
+                    sprintf(request, "PATH:%s:%s:%s:%s", destinationStation, timeArrivingAtPort, name, time);
+                    
+                    broadcast(adjacentPorts, request); // We ask around for if anyone knows how to get to destination
+                }
 
                 // Reply to TCP connection
                 send(connfd, finalResult, strlen(finalResult), 0); // Send time of arrival and path of destination back to the web
@@ -231,14 +271,8 @@ int main(int argc, char **argv) {
             // Check the request (using regex)
             regexCheck = regcomp(&regex, "NAME", 0);
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "NAME" as a string exists within the UDP message, meaning that they want to know our name 
-            char sendingName[50];
-            
-            strcpy(sendingName, "IAM:");
-            strcat(sendingName, name);
-            strcat(sendingName, ":");
-            strcat(sendingName, argv[3]);
             if (regexCheck == 0) { // They are asking for our name
-                printf("Regex Check Success: IAM\n");
+                printf("Regex Check Success: NAME\n");
                 strtok(buf,":"); // This is required to get to the next tokens 
 
                 // We can add this to our dictionary, meaning by the time all the stations have been created and performed the broadcast, every station will have a complete dictionary of adjacent stations names and ports
@@ -246,6 +280,13 @@ int main(int argc, char **argv) {
                 strcpy(returnName, strtok(0,":"));
                 int returnPort = atoi(strtok(0,":"));
                 
+                // Constructing reply string
+                char sendingName[50];
+                strcpy(sendingName, "IAM:");
+                strcat(sendingName, name);
+                strcat(sendingName, ":");
+                strcat(sendingName, argv[3]);
+
                 bzero(stationNameArray[dictionaryPosition], sizeof(stationNameArray[dictionaryPosition]));
                 strcpy(stationNameArray[dictionaryPosition], returnName);
                 stationPortArray[dictionaryPosition] = returnPort;
@@ -266,10 +307,17 @@ int main(int argc, char **argv) {
                 //udpSend(port, reply);
 
                 /*
+                int isAdjacent = 0;
                 for (int i =0; i<(dictionaryPosition); i++) {
                     if(strcmp(stationNameArray[i], destinationStation)==0) {
                         printf("oh this should be easy\n");
+                        isAdjacent = 1;
                     }
+                }
+
+                if (isAdjacent == 0) {
+                    // oh boy
+                    broadcast()
                 }
                 */
 
@@ -279,8 +327,9 @@ int main(int argc, char **argv) {
             regexCheck = regcomp(&regex, "IAM:", 0);
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will be a reply from a name request
             if (regexCheck == 0) { // This is a reply meaning that they have given us their name
-                printf("Regex Check Success: NAME\n");
+                printf("Regex Check Success: IAM\n");
                 
+                // Add station to station dictionary
                 char incomingName[20];
                 strtok(buf, ":");
                 strcpy(incomingName, strtok(0,":"));
