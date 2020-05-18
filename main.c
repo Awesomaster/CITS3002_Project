@@ -65,9 +65,8 @@ char* udpSend(int stationPort, char *message) {
 }
 
 // Sends a signal to all adjacent ports with message
-int broadcast(int *adjacentPorts, char *message) {
-    printf("You are currently broadcasting to %li station/s\n",(sizeof(adjacentPorts)/sizeof(int)-1));
-    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int)-1; i++) { 
+int broadcast(int *adjacentPorts, char *message, int numberOfAdjacentStations) {
+    for (int i=0; i<numberOfAdjacentStations; i++) { 
         if(adjacentPorts[i] != 0) {
             udpSend(adjacentPorts[i], message);
         }
@@ -99,9 +98,10 @@ int main(int argc, char **argv) {
     char *name = argv[1]; // the spoken name of the station that will be used to refer to the station
     int tcpPort = atoi(argv[2]); // port for tcp connection from e.g. http://localhost:port
     int udpPort = atoi(argv[3]); // port for udp for other stations to use to communicate with this station 
-    
-    int adjacentPorts[argc-4];
-    for (int i=0; i<(argc-4); i++) {
+    int numberOfAdjacentPorts = argc-4;
+
+    int adjacentPorts[numberOfAdjacentPorts];
+    for (int i=0; i<(numberOfAdjacentPorts); i++) {
         adjacentPorts[i] = atoi(argv[i+4]);
     }
     
@@ -177,19 +177,18 @@ int main(int argc, char **argv) {
     // Binding UDP
     bind(udpfd, (struct sockaddr *) &udpServerAddress, sizeof(udpServerAddress));
 
-    // Both TCP and UDP Servers set up
-    printf("%s %s\n", name, "is running... waiting for connections...");    
-
     // This is to find the name of all adjacent stations
     char broadcastMessage[50];
     sprintf(broadcastMessage, "NAME:%s:%s", name, argv[3]);
-    broadcast(adjacentPorts, broadcastMessage);
+    broadcast(adjacentPorts, broadcastMessage, numberOfAdjacentPorts);
 
     // Initialisations for select
     FD_ZERO(&rset);
     maxfd = max(listenfd, udpfd) + 1;
 
+    // Both TCP and UDP Servers set up
     // Listen to UDP and TCP
+    printf("%s %s\n", name, "is running... waiting for connections...");
     printf("Listening on ports\n");
     for(;;) {
         FD_SET(listenfd, &rset);
@@ -245,13 +244,16 @@ int main(int argc, char **argv) {
 
                 if (isAdjacent == 0) {
                     // Here we become a UDP client after we find the port of the station we are trying to get to
+                    printf("%s\n", "Not adjacent");
                     char request[MAXDATASIZE];
+                    bzero(request, sizeof(request));
+                    
                     int timeArrivingAtPort = 0;
-                    for (int i=0; i<sizeof(adjacentPorts)/sizeof(int)-1; i++) { 
+                    for (int i =0; i<sizeof(adjacentPorts)/sizeof(int); i++) { 
                         for (int j = 0; j<timetablePos; j++) {
                             if (strcmp(timetable[j].destination, stationNameArray[i]) == 0) {
                                 if (timetable[j].leaveTime >= timeInt) {
-                                    sprintf(request, "PATH:%s:%i:%s-%s", destinationStation, timetable[j].arrivalTime, name, time);
+                                    sprintf(request, "PATH:%s:%i:%s-%s-%i", destinationStation, timetable[j].arrivalTime, name, time, timetable[j].arrivalTime);
                                     printf("Request sent: %s\n", request);
                                     break;
                                 }
@@ -288,11 +290,21 @@ int main(int argc, char **argv) {
                 strtok(buf, ":"); // This is to remove PATH
                 char *destinationStation = strtok(0, ":");
                 char *arriveHere = strtok(0, ":"); // Time it arrives at this station
-                char *firstStep = strtok(0, ":"); // This is the first step in the journey, we can use this to tell if we are finished and other things
+                char *otherSteps = strtok(0, ":"); // This is the first step in the journey, we can use this to tell if we are finished and other things
 
                 char messageToPassForward[MAXDATASIZE];
-                sprintf(messageToPassForward, "PATH:%s:%i:%s-%s", destinationStation, timetable[j].arrivalTime, name, time);
-                sprintf()
+                for (int i =0; i<sizeof(adjacentPorts)/sizeof(int); i++) { 
+                    for (int j = 0; j<timetablePos; j++) {
+                        if (strcmp(timetable[j].destination, stationNameArray[i]) == 0) { // We want to be able to remove the stations we have already been to on this journey from our stationNameArray
+                            if (timetable[j].leaveTime >= arriveHere) {
+                                printf("Request passing forward: %s\n", messageToPassForward);
+                                sprintf(messageToPassForward, "PATH:%s:%i:%s, %s-%s-%i", destinationStation, timetable[j].arrivalTime, otherSteps, name, arriveHere, timetable[j].leaveTime);
+                                break;
+                            }
+                        }
+                    }
+                    udpSend(stationPortArray[i], messageToPassForward);
+                }
 
                 char *reply = "idk yet";
                 int port = 1; // this will be set to the guy it needs to be
