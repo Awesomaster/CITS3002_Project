@@ -15,7 +15,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
-#define MAXDATASIZE 4096 // Max data size
+#define MAXDATASIZE 2048 // Max data size
 #define MAXNAMESIZE 20 // Max size of station name
 #define MAXTIMETABLE 50 // Max number of trips in a timetable
 #define LISTENQ 4 // Max number of client connections
@@ -111,6 +111,12 @@ int main(int argc, char **argv) {
     int stationPortArray[argc-4];
     int dictionaryPosition = 0;
 
+    // Initialising Variables to look back to for return message history
+    int numberOfPathsSent = 0;
+    int numberOfRepliesRecived = 0;
+    char repliesRecieved[numberOfAdjacentPorts][MAXDATASIZE];
+    bzero(repliesRecieved, sizeof(repliesRecieved));
+
     // Variabled required for socket connections
     int listenfd, udpfd, maxfd, connfd, externalfd, n, nready;
     fd_set rset;
@@ -191,6 +197,9 @@ int main(int argc, char **argv) {
     printf("%s %s\n", name, "is running... waiting for connections...");
     printf("Listening on ports\n");
     while(1) {
+
+        printf("Number of Paths Sent: %i\n", numberOfPathsSent);
+
         FD_SET(listenfd, &rset);
         FD_SET(udpfd, &rset);
         nready = select(maxfd, &rset, NULL, NULL, NULL);
@@ -206,8 +215,8 @@ int main(int argc, char **argv) {
 
                 bzero(buf, sizeof(buf));
                 recv(connfd, buf, sizeof(buf),0);
-                printf("%s: ", "String recieved from TCP");
-                puts(buf);
+                printf("%s\n", "String recieved from TCP");
+                // puts(buf);
 
                 // Checking that it is actually a journey request
                 char *bufStart = strdup(buf);
@@ -277,7 +286,8 @@ int main(int argc, char **argv) {
                     exit(0);
                 }
                 bzero(bufStart, sizeof(bufStart));
-            }
+            } 
+            numberOfPathsSent = numberOfAdjacentPorts;
             close(connfd);
         }
 
@@ -352,16 +362,18 @@ int main(int argc, char **argv) {
                                         hasArrived = 1;
                                         break;
                                     } else {
-                                        sprintf(messageToPassForward, "PATH:%s:%i:%s,%s-%i-%i", destinationStation, noStationsVisited, timetable[j].arrivalTime, otherStepsForReply, name, arriveHere, timetable[j].leaveTime);
+                                        sprintf(messageToPassForward, "PATH:%s:%i:%s,%s-%i-%i", destinationStation, timetable[j].arrivalTime, otherStepsForReply, name, arriveHere, timetable[j].leaveTime);
                                         printf("Request passing forward: %s\n", messageToPassForward);
                                         hasArrived = 0;
+                                        numberOfPathsSent++;
                                         break;
                                     }
                                     
                                 }
                             }
                         }
-                        if (hasArrived == 1) {
+
+                        if (hasArrived == 1) { // This is a reply
                             for (int i = 0; i < numberOfAdjacentPorts; i++) {
                                 if (strcmp(arrayOfVisited[noStationsVisited-1], stationNameArray[i]) == 0) {
                                     udpSend(stationPortArray[i], messageToPassForward); // This will pass the message back to the previous station
@@ -389,12 +401,32 @@ int main(int argc, char **argv) {
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if its a return message, and then will sort it into successful and failed returns
             if (regexCheck == 0) {
                 printf("Regex Check Success: RET\n");
+                strcpy(repliesRecieved[numberOfRepliesRecived], strdup(buf));
+                numberOfRepliesRecived++;
+
                 strtok(buf, ":"); // This is to remove PATH
-                int noStationsVisited = atoi(strtok(0,":")); // This is the amount of stations visited in the return path left from this station (just added here for convinence/efficiency)
+                int noStationsLeft = atoi(strtok(0,":")); // This is the amount of stations visited in the return path left from this station (just added here for convinence/efficiency)
                 char *destinationStation = strtok(0, ":");
                 int arriveHere = atoi(strtok(0, ":")); // Time it arrives at this station
                 char *otherSteps = strtok(0, ":"); // This is the first step in the journey, we can use this to tell if we are finished and other things
                 char *otherStepsForReply = strdup(otherSteps);
+
+                // first we add to replies recieved, and take it off sent amount
+                
+                printf("We have sent: %i, and we have recieved: %i\n", numberOfPathsSent, numberOfRepliesRecived);
+                if (numberOfRepliesRecived == numberOfPathsSent) {
+                    
+                    printf("We have recieved all replies\n");
+
+                    for (int i = 0; i < numberOfRepliesRecived; i++) {
+                        // go through how long each path is, and send them all back, with the only success being 
+                    }
+                    // go through replies recieved and send back the best option as a success, and the other options still need a reply but as a fail
+                    
+
+                    numberOfPathsSent = 0; // Set them back to zero now that we have recieved all the replies, this node will no longer be used in this network so we can reset it for next request
+                    numberOfRepliesRecieved = 0;
+                }
 
                 char messageToPassBack[MAXDATASIZE];
                 //printf("%s\n", messageToPassForward);
@@ -413,17 +445,15 @@ int main(int argc, char **argv) {
                     stationVisited = strtok(0, "-");
                     noStationsVisited++;
                 }
-
+                
+                
                 regexCheck = regcomp(&regex, "SRET", 0);
                 regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if its a return message, and then will sort it into successful and failed returns
-                
-                // first we pop it off our checklist of paths that we have looked into so far because no matter if its success or fail, its still a reply
-                
                 if (regexCheck == 0) { // Successful return
-                    if (noStationsVisited > 1) {
-                        sprintf(messageToPassBack, "SRET:%i:%s:%i:%s", noStationsVisited-1, destinationStation, arriveHere, otherStepsForReply);
+                    if (noStationsLeft > 1) {
+                        sprintf(messageToPassBack, "SRET:%i:%s:%i:%s", noStationsLeft-1, destinationStation, arriveHere, otherStepsForReply);
                         for (int i = 0; i < numberOfAdjacentPorts; i++) {
-                            if (strcmp(arrayOfVisited[noStationsVisited-1], stationNameArray[i]) == 0) {
+                            if (strcmp(arrayOfVisited[noStationsLeft-1], stationNameArray[i]) == 0) {
                                 udpSend(stationPortArray[i], messageToPassBack); // This will pass the message back to the previous station
                                 break;
                             }
@@ -433,10 +463,10 @@ int main(int argc, char **argv) {
 
                     }
                 } else { // Failed return 
-                    if (noStationsVisited > 1) {
-                        sprintf(messageToPassBack, "FRET:%i:%s:%i:%s", noStationsVisited-1, destinationStation, arriveHere, otherStepsForReply);
+                    if (noStationsLeft > 1) {
+                        sprintf(messageToPassBack, "FRET:%i:%s:%i:%s", noStationsLeft-1, destinationStation, arriveHere, otherStepsForReply);
                         for (int i = 0; i < numberOfAdjacentPorts; i++) {
-                            if (strcmp(arrayOfVisited[noStationsVisited-1], stationNameArray[i]) == 0) {
+                            if (strcmp(arrayOfVisited[noStationsLeft-1], stationNameArray[i]) == 0) {
                                 udpSend(stationPortArray[i], messageToPassBack); // This will pass the message back to the previous station
                                 break;
                             }
