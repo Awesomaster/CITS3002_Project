@@ -117,8 +117,8 @@ int main(int argc, char **argv) {
     char repliesRecieved[numberOfAdjacentPorts][MAXDATASIZE];
     bzero(repliesRecieved, sizeof(repliesRecieved));
 
-    // Initialising shortest path variables
-    int shortestPathTime = 24*60; // A whole day, meaning if its less than this, it will be the best path
+    // Initialising shortest path variables OR 5 DAYS FOR TESTING
+    int shortestPathTime = 5*24*60; // A whole day, meaning if its less than this, it will be the best path 
     char shortestPath[MAXDATASIZE];
 
     // Final Result that will be returned to the web
@@ -240,6 +240,7 @@ int main(int argc, char **argv) {
                     
                     char time[4];
                     int timeInt = getTime();
+
                     sprintf(time, "%d", timeInt);
 
                     // This might be able to be done in a seperate function and probably should because we will need to send the intial request there but this is similar to the code that wwill need to happpen if a particular stop doesnt have the destination station adjacent
@@ -445,15 +446,24 @@ int main(int argc, char **argv) {
                     }
                 } else {
                     // We are the final stop, our message has come back, now we want to process it   
-                    printf("Choo choo we are home \n");                 
+                    char *headerResponse = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: Closed\n\n";
+                    char *htmlHeader = "<html>\n<body>\n<h2>";
+                    printf("Choo choo we are home, this path will take %i, and our quickest path is %i\n", totalTransportTime, shortestPathTime);                 
                     if (totalTransportTime <= shortestPathTime) {
                         shortestPathTime = totalTransportTime;
-                        sprintf(finalResult, "%s, you will arrive at %s, at %i. It took %i minutes (on transport) to get here\n", otherStepsForReply, destinationStation, arriveHere, totalTransportTime);
+                        
+                        char *stepsHappening = strtok(otherStepsForReply, ":");
+                        while (stepsHappening != NULL) {
+                            printf("%s\n", stepsHappening);
+                            stepsHappening = strtok(0, ":");
+                        }
+
+                        sprintf(finalResult, "%s%s %s, you will arrive at %s, at %i. It took %i minutes (on transport) to get here %s\n", headerResponse, htmlHeader, otherStepsForReply, destinationStation, arriveHere, totalTransportTime, "</h2>\n</body>\n</html>\n");
                         printf("Choo choo we are home via: %s\n", finalResult);
                     }
                 }
             }
-                
+            
             regexCheck = regcomp(&regex, "NAME", 0);
             regexCheck = regexec(&regex, buf, 0, NULL, 0); // This will check if "NAME" as a string exists within the UDP message, meaning that they want to know our name 
             if (regexCheck == 0) { // They are asking for our name
