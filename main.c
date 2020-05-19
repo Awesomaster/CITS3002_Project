@@ -284,6 +284,7 @@ int main(int argc, char **argv) {
                     }
 
                     // Reply to TCP connection
+                    sleep(1);
                     send(connfd, finalResult, strlen(finalResult), 0); // Send time of arrival and path of destination back to the web
                     printf("FinalResult: %s\n", finalResult);
                     printf("Replied to TCP Connection. TCP Over.\n");
@@ -443,10 +444,13 @@ int main(int argc, char **argv) {
                         }
                     }
                 } else {
-                    // We are the final stop, our message has come back, now we want to process it                    
-                    
-                    sprintf(finalResult, "%s, you will arrive at %s, at %i. It took %i minutes (on transport) to get here\n", otherStepsForReply, destinationStation, arriveHere, totalTransportTime);
-                    printf("Choo choo we are home via: %s\n", finalResult);
+                    // We are the final stop, our message has come back, now we want to process it   
+                    printf("Choo choo we are home \n");                 
+                    if (totalTransportTime <= shortestPathTime) {
+                        shortestPathTime = totalTransportTime;
+                        sprintf(finalResult, "%s, you will arrive at %s, at %i. It took %i minutes (on transport) to get here\n", otherStepsForReply, destinationStation, arriveHere, totalTransportTime);
+                        printf("Choo choo we are home via: %s\n", finalResult);
+                    }
                 }
             }
                 
