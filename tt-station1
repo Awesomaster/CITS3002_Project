@@ -1,7 +1,7 @@
 station1,-31.8448,115.7963
-07:15,Stop1,07:54,station2
-08:15,Stop1,08:46,station3
-14:20,Stop1,14:30,station4
-23:59,StopPlease,00:45,station2
-23:58,StopPlease,00:25,station3
-23:58,StopPlease,00:25,station4
+07:15,bus,Stop1,07:54,station2
+08:15,bus,Stop1,08:46,station3
+14:20,bus,Stop1,14:30,station4
+23:59,bus,StopPlease,00:45,station2
+23:58,bus,StopPlease,00:25,station3
+23:58,bus,StopPlease,00:25,station4
