@@ -85,8 +85,6 @@ int getTime() {
     return hours*100+minutes;
 }
 
-
-
 int main(int argc, char **argv) {
     printf("Code is starting at %i\n", getTime());
     ;
@@ -114,9 +112,8 @@ int main(int argc, char **argv) {
     int numberOfRepliesRecived = 0;
     char repliesRecieved[numberOfAdjacentPorts][MAXDATASIZE];
 
-    // Initialising shortest path variables 
+    // Initialising shortest path time 
     int shortestPathTime = 24*60; // A whole day, meaning the first path it recieves will be smaller and will set it to the smallest
-    char shortestPath[MAXDATASIZE];
 
     // Final Result that will be returned to the web
     char finalResult[MAXDATASIZE]; // This will be the time of arrival and path to destination
@@ -241,7 +238,6 @@ int main(int argc, char **argv) {
                 int timeInt = getTime();
 
                 // FOR TESTING WE SET TIME EARLY TO ACTUALLY GET PATHS BECAUSE IM CODING TOO LATE
-                timeInt = 700;
 
                 // Get time as a char* for when we need it as a str
                 snprintf(time, 4*sizeof(char), "%d", timeInt);
@@ -384,16 +380,9 @@ int main(int argc, char **argv) {
                 char *otherSteps = strtok(0, ":"); // This is the first step in the journey, we can use this to tell if we are finished and other things
                 char *otherStepsForReply = strdup(otherSteps); // Duplicate used because using otherSteps again is kind of buggy
 
-                // // We only send messages forward if they are faster (as in if it gets to this stop faster, then it will be a faster journey to the destination, conversely if the message is slower to this stop, it will not be a better path)
-                // char *destOfShortestPath = strtok(shortestPath, "-");
-                // if ((totalTransportTime <= shortestPathTime) || (destOfShortestPath != destinationStation)) { // Here we are either saying that it is the shortest path of what was flowing through the system before, or its a new request and then we need to start it from scratch
-                //     shortestPathTime = totalTransportTime; // Make this the new shortest path, this should always be the case for the first option because the longest path is 
-                //     bzero(shortestPath, sizeof(shortestPath)); // Empty the shortest path 
-                //     snprintf(shortestPath, MAXDATASIZE*sizeof(char), "%s", otherStepsForReply); // Fill shortest path with this path, we can use this to stop returning messages from being sent back if a more efficient message has passed us
                 int hasArrived = 0; // This will be used to tell if we have arrived at the destination and will change the type of reply
 
                 char arrayOfVisited[numberOfAdjacentPorts][MAXNAMESIZE]; // An array of stations that are in the history log that is being passed around between the stations
-                //bzero(arrayOfVisited, sizeof(arrayOfVisited)*sizeof(char)); // Empty the array so that we dont have any memory errors 
                 char *stationVisited;
                 stationVisited = strtok(otherSteps, "-"); // This will be the first stop visited based on the path structure (otherSteps is the history and the first part in each history section is the station name)
                 int numberOfStationsVisited = 0; //
@@ -401,17 +390,13 @@ int main(int argc, char **argv) {
                 while (stationVisited != NULL) {
                     snprintf(arrayOfVisited[numberOfStationsVisited], MAXNAMESIZE*sizeof(char), "%s", stationVisited); // Since we know it isnt null we can copy it into our array
                     strtok(0,","); // Getting to the next step of the history (each step is seperated by a comma)
-                    // bzero(stationVisited, MAXNAMESIZE*sizeof(char)); // Empty the stationVisited variable again so that we dont have any overlapping names
                     stationVisited = strtok(0, "-"); // Reassigning the stationVisited
                     numberOfStationsVisited++; // We have added one more station
                 }
 
                 char messageToPassForward[MAXDATASIZE]; // This is the message that we will sending in either our PATH or RET message depending on if we are adjacent to the destination
-                //printf("%s\n", messageToPassForward);
-                //bzero(messageToPassForward, sizeof(messageToPassForward)); // Ensuring this is empty (which it should be already)
-
+                
                 char toBeVisitedStationNameArray[numberOfAdjacentPorts][MAXNAMESIZE]; // This is the array of stations names that are adjacent to us, but are not in this messages history
-                //bzero(toBeVisitedStationNameArray, sizeof(toBeVisitedStationNameArray));
                 int toBeVisitedStationPortArray[numberOfAdjacentPorts]; // This is the array of stations ports that are adjacent to us, but are not in this messages history
 
                 int toBeVisitedArraySize = 0;
@@ -436,7 +421,6 @@ int main(int argc, char **argv) {
                 int amISendingPath = 0;
                 printf("%s: Stations Visitied: %i, Adjacent Ports: %i, Scuffed Array: %i\n", name, numberOfStationsVisited, numberOfAdjacentPorts, toBeVisitedArraySize);
                 if (toBeVisitedArraySize > 0) {
-                    //printf("%s\n", messageToPassForward);
                     for (int i = 0; i < toBeVisitedArraySize; i++) { // We go through all of the adjacent stations that havent seen this message yet
                         for (int j = 0; j<timetablePos; j++) {
                             if (strcmp(timetable[j].destination, toBeVisitedStationNameArray[i]) == 0) { // We want to be able to remove the stations we have already been to on this journey from our stationNameArray
@@ -444,7 +428,7 @@ int main(int argc, char **argv) {
                                     // We need to calculate time taken like this because we are sorting the number as a 4 digit number, meaning that if a train leaves at 1250 and arrives at 1303, timeTaken will be 53 minutes instead of 13, which this below will fix
                                     int timeTaken = timeDif(timetable[j].arrivalTime, timetable[j].leaveTime);
                                     if (strcmp(timetable[j].destination, destinationStation) == 0) {
-                                        // RET means that it is returning the path and it was sucessful
+                                        // SRET means that it is returning the path and it was sucessful
                                         snprintf(messageToPassForward, MAXDATASIZE*sizeof(char), "SRET:%i:%s:%i:%i:%s,%s-%i-%i-%s-%s", numberOfStationsVisited-1, destinationStation, timetable[j].arrivalTime, totalTransportTime+timeTaken, otherStepsForReply, name, timeTaken, timetable[j].leaveTime, timetable[j].stop, timetable[j].vehicle);
                                         printf("%s: Adjacent to destination. Sending: %s back to: %s (port: %i) for checking!!!\n", name, messageToPassForward, stationNameArray[i], stationPortArray[i]);
                                         hasArrived = 1;
@@ -558,11 +542,9 @@ int main(int argc, char **argv) {
                     char *otherSteps = strtok(0, ":"); // This is the first step in the journey, we can use this to tell if we are finished and other things
                     char *otherStepsForReply = strdup(otherSteps);
 
-                    // printf("LOOK 3Reply %i: %s\n", bestReplyInt, repliesRecieved[bestReplyInt]);fflush(stdout);
                     printf("%s: Breaking down the return message, noLeft: %i, dest: %s, arrHere: %i, timeTot: %i, otherSteps: %s\n", name, numberOfStationsLeft, destinationStation, arriveHere, totalTransportTime, otherSteps);fflush(stdout);
 
                     char arrayOfVisited[numberOfAdjacentPorts][MAXNAMESIZE]; // Array needed to keep track of where we have been
-                    //bzero(arrayOfVisited, numberOfAdjacentPorts*MAXNAMESIZE*sizeof(char));
                     char *stationVisited = strtok(otherSteps, "-");
                     int numberOfStationsVisited = 0;
                     printf("%s: endering\n", name);fflush(stdout);
@@ -574,7 +556,6 @@ int main(int argc, char **argv) {
                     }
 
                     if (numberOfStationsLeft > 0) { // We arent at the back to source yet, but we will send all our replies
-                        // printf("LOOK 4Reply %i: %s\n", bestReplyInt, repliesRecieved[bestReplyInt]);fflush(stdout);
                         printf("%s: We arent there yet, getting there\n", name);fflush(stdout);
                         if (isSuccess == 1) {
                             snprintf(messageToPassBack, MAXDATASIZE*sizeof(char), "SRET:%i:%s:%i:%i:%s", numberOfStationsLeft-1, destinationStation, arriveHere, totalTransportTime, otherStepsForReply);
@@ -598,7 +579,6 @@ int main(int argc, char **argv) {
                         char *currStation = strtok(otherStepsFinalCopy, "-");
                         printf("WE HAVE ARRIVED AT SOURCE!!!!: currStation: %s", currStation);fflush(stdout);
                         while (currStation != NULL) {
-                            //printf("Steps Taken: %s\n", stepsHappening);
                             int currTimeTaken = atoi(strtok(0, "-"));
                             int currLeaveHere = atoi(strtok(0, "-"));
                             int leaveHereHours = currLeaveHere/100;
