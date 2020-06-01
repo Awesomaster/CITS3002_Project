@@ -1,4 +1,5 @@
 import socket
+import select
 import sys
 import time
 import re
@@ -173,7 +174,7 @@ def tcpListen(sock, udp):
 # Deal with incoming UDP connection
 def udpListen(sock):
     data, address = sock.recvfrom(MAXDATASIZE)
-    dataList = data.split(":") # All my datagrams use colons as a delimiter
+    dataList = str(data).split(":") # All my datagrams use colons as a delimiter
     requestType = dataList[0] # Will will use the first term to tell what kind of request it is and thus dictate how we should reply
 
     if requestType == "NAME":
@@ -221,7 +222,8 @@ def udpListen(sock):
 # Source: https://docs.python.org/3/howto/sockets.html
 # Create TCP socket
 tcpSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-tcpSock.connect(('localhost', tcpPort));
+tcpSock.bind(('localhost', tcpPort));
+tcpSock.listen(1);
 
 # Create UDP socket
 udpSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -233,7 +235,7 @@ broadcast(adjacentPorts, nameMessage)
 
 while True:
     # https://stackoverflow.com/questions/5160980/use-select-to-listen-on-both-tcp-and-udp-message
-    inputSock, outputSock, exceptSock = socket.select([tcpSock, udpSock], [], [])
+    inputSock, outputSock, exceptSock = select.select([tcpSock, udpSock], [], [])
 
     for sock in inputSock:
         if sock == tcpSock:
