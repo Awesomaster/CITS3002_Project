@@ -91,7 +91,6 @@ def udpSend(port, message):
     sendingSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sendingSocket.sendto(byteMsg, ("localhost", port))
     print("We just sent " + message + " to " + str(port))
-    sendingSocket.close()
 
 # Send to a list of ports
 def broadcast(portsList, message):
@@ -118,8 +117,12 @@ def prettyTime(time):
         timeType = "PM"
     else:
         timeType = "AM"  
-           
-    pretty = str(timeHrs) + ":" + str(timeMins) + timeType
+    
+    if (timeMins < 10):
+        timeMins = "0" + str(timeMins)
+    else:
+        timeMins = str(timeMins)
+    pretty = str(timeHrs) + ":" + timeMins + timeType
     return pretty
 
 # Deal with incoming TCP connection
@@ -209,7 +212,6 @@ def tcpListen(sock, udp):
     else: # if its not a journey request we can just close it and ignore it
         client.close()
     
-    sock.close()
     # END OF TCPLISTEN FUNC
 
 # Deal with incoming UDP connection
@@ -339,7 +341,6 @@ def udpListen(sock):
             client.send(reply.encode('utf-8'))
             client.close()
     
-    sock.close()
     # END OF UDPLISTEN FUNC
 # ---------------------- </DEFINING FUNCTIONS> ----------------------------
 
@@ -362,6 +363,8 @@ broadcast(adjacentPorts, nameMessage)
 createTimetable()
 print("TCP & UDP Listening...")
 while True:
+    print(tcpSock)
+    print(udpSock)
     # https://stackoverflow.com/questions/5160980/use-select-to-listen-on-both-tcp-and-udp-message
     inputSock, outputSock, exceptSock = select.select([tcpSock, udpSock], [], [])
 
