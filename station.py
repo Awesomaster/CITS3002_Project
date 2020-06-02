@@ -364,8 +364,6 @@ broadcast(adjacentPorts, nameMessage)
 createTimetable()
 print("TCP & UDP Listening...")
 while True:
-    print(tcpSock)
-    print(udpSock)
     # https://stackoverflow.com/questions/5160980/use-select-to-listen-on-both-tcp-and-udp-message
     inputSock, outputSock, exceptSock = select.select([tcpSock, udpSock], [], [])
 
