@@ -1,6 +1,8 @@
 // CITS3002 Project
 // By Josh Collier
 // Written and tested in linux
+// Compiled with gcc main.c -o station
+// Run with ./station ...
 
 // Headers
 #include <stdio.h>
