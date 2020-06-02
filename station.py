@@ -1,10 +1,12 @@
+import datetime
+import re
 import socket
 import select
 import sys
 import time
-import re
-import datetime
 
+
+# -------------------- <INITIALISING VARIABLES> --------------------------
 # Max data size
 MAXDATASIZE = 1024
 
@@ -34,9 +36,11 @@ adjacentStationDict = {} # Dictionary of all adjacent stations and their port
 requestsSent = 0
 requestsRecieved = 0
 clientsAwaitingReplies = {}
+# -------------------- </INITIALISING VARIABLES> --------------------------
 
-# socketReplyQueue = [] # if we want to make it so that TCP just deals with it and chucks it away this is it (just add socket to this queue and we will reply when we need)
 
+# ---------------------- <DEFINING FUNCTIONS> ----------------------------
+# Fills out the timetable dictionary, is recalled every time we get a UDP recv, so that we always have the most updated information
 def createTimetable():
     timetableDict.clear()
     fileName = "tt-" + stationName
@@ -90,6 +94,7 @@ def broadcast(portsList, message):
     for port in portsList:
         udpSend(port, message)
 
+# Finding actual time difference between 2 times represented as 4 digit numbers, returned in minutes
 def timeDif(arr, leave):
     arrHrs = int(arr/100)
     leaveHrs = int(leave/100)
@@ -98,6 +103,7 @@ def timeDif(arr, leave):
     thisSegmentTime = (arrHrs-leaveHrs)*60 + arrMins - leaveMins
     return thisSegmentTime            
 
+# Inputing ugly 4 digit time number, returning it as a pretty string
 def prettyTime(time):
     timeHrs = int(time/100)
     timeMins = int(time%100)
@@ -331,7 +337,10 @@ def udpListen(sock):
     
     sock.close()
     # END OF UDPLISTEN FUNC
+# ---------------------- </DEFINING FUNCTIONS> ----------------------------
 
+
+# ---------------------------- <CODE FLOW> ---------------------------------
 # Source: https://docs.python.org/3/howto/sockets.html
 # Create TCP socket
 tcpSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -361,3 +370,4 @@ while True:
             udpListen(sock) #UDP stuff happens
         else:
             print("Socket Unknown: ", sock)
+# --------------------------- </CODE FLOW> ---------------------------------
