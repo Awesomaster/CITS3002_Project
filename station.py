@@ -1,6 +1,7 @@
 # CITS3002 Project
 # By Josh Collier
 # Written and tested in linux
+# Run with python3 ./station.py ...
 
 import datetime
 import re
