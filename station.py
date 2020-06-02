@@ -38,6 +38,7 @@ clientsAwaitingReplies = {}
 # socketReplyQueue = [] # if we want to make it so that TCP just deals with it and chucks it away this is it (just add socket to this queue and we will reply when we need)
 
 def createTimetable():
+    timetableDict.clear()
     fileName = "tt-" + stationName
     timetableFile = open(fileName, "r")
     n = 0
@@ -82,6 +83,7 @@ def udpSend(port, message):
     sendingSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sendingSocket.sendto(byteMsg, ("localhost", port))
     print("We just sent " + message + " to " + str(port))
+    sendingSocket.close()
 
 # Send to a list of ports
 def broadcast(portsList, message):
@@ -96,18 +98,32 @@ def timeDif(arr, leave):
     thisSegmentTime = (arrHrs-leaveHrs)*60 + arrMins - leaveMins
     return thisSegmentTime            
 
+def prettyTime(time):
+    timeHrs = int(time/100)
+    timeMins = int(time%100)
+    timeType = ""
+    if (timeHrs >= 12):
+        if (timeHrs > 12):
+            timeHrs -= 12 
+        timeType = "PM"
+    else:
+        timeType = "AM"  
+           
+    pretty = str(timeHrs) + ":" + str(timeMins) + timeType
+    return pretty
+
 # Deal with incoming TCP connection
 def tcpListen(sock, udp):
     # Get current time (and convert to the format we are using it in, as a 4 digit number)
     currentTime = datetime.datetime.now()
     currentTimeInt = currentTime.hour*100 + currentTime.minute
-
+    
+    # Accept client socket and recieve from them
     client, address = sock.accept()
     data = client.recv(MAXDATASIZE)
-    dataStr = str(data, "utf-8")
-    # deal with it
+    dataStr = data.decode("utf-8") # Data recieved from socket is in byte format, we need to decode it
     
-    # Check if this is a journey request
+    # Check if this is a journey request (otherwise we will just ignore it)
     if ("GET /?to=" in dataStr):
         # https://docs.python.org/3/library/re.html
         destinationStation = re.search(r'(?<=\?to=)\w+', dataStr) # This will grab the name after the ?to=
@@ -132,27 +148,9 @@ def tcpListen(sock, udp):
             # If we get to this point and we dont have a successful trip, we dont have a path avaliable tonight :(
             if (isTripAvaliable):
                 # Return success
-                leaveTimeMins = trip.leave%100
-                leaveTimeHours = int(trip.leave/100)
-                leaveTimeType = ""
-                if (leaveTimeHours >= 12):
-                    leaveTimeType = "PM"
-                    if (leaveTimeHours > 12):
-                        leaveTimeHours -= 12
-                else:
-                    leaveTimeType = "AM"
-
-                arriveTimeMins = trip.arrive%100
-                arriveTimeHours = int(trip.arrive/100)
-                arriveTimeType = ""
-                if (arriveTimeHours >= 12):
-                    leaveTimeType = "PM"
-                    if (arriveTimeHours > 12):
-                        arriveTimeHours -= 12
-                else:
-                    arriveTimeType = "AM"
-                # Add total trip time
-                reply += "<h2>From: " + stationName + " hop on " + trip.vehicle + " at " + trip.stop + "<br>To: " + destinationStation + "<br>Leaving at: " + str(leaveTimeMins) + " past " + str(leaveTimeHours) + leaveTimeType + "<br>Arriving at: " + str(arriveTimeMins) + " past " + str(arriveTimeHours) + arriveTimeType + "</h2"
+                leaveTime = prettyTime(trip.leave)
+                arriveTime = prettyTime(trip.arrive)
+                reply += "<h2>From: " + stationName + " hop on " + trip.vehicle + " at " + trip.stop + "<br>To: " + destinationStation + "<br>Leaving at: " + leaveTime + "<br>Arriving at: " + arriveTime + "</h2"
             else:
                 # Return failure
                 reply += "<h2>Its too late for a trip today, try again earlier tomorrow ;(</h2>"
@@ -177,7 +175,7 @@ def tcpListen(sock, udp):
                         request = "PATH:" + destinationStation + ":" + str(timetableEvent.arrive) + ":" + str(timeTaken) + ":" + historySegment
                         # NOTE: PATH:destination:arriveAtDestination:timeOnTransport:thisStationName-timeOfThisSplit-timeLeftThisStation-stopAtThisStation-vehicleType
                         udpSend(adjacentStationDict.get(station), request)
-                        requestsSent += 1
+                        # requestsSent += 1
                         break
             if (areWeSendingAny):
                 # If we are sending anything then we want to store the client to be able to response later
@@ -196,11 +194,12 @@ def tcpListen(sock, udp):
             #     isSuccess, reply = udpListen(udp)
             #     if (isSuccess):
             #         client.send(reply)
+            #         client.close()
             #         break
-
-    # If we deal with the TCP connection entirely within this tcpListen func we can have this at the end, but its not necessarily necessary
+    else: # if its not a journey request we can just close it and ignore it
+        client.close()
     
-
+    sock.close()
     # END OF TCPLISTEN FUNC
 
 # Deal with incoming UDP connection
@@ -235,8 +234,9 @@ def udpListen(sock):
         print(adjacentStationDict)
 
     if (requestType == "PATH"):
+        createTimetable() # This will make sure if there are any changes to the timetable file they will be accounted for
         # Deal with PATH request
-        print("We recieved a PATH request")
+        print("We recieved a PATH request", dataStr)
 
         # NOTE: PATH:destination:arriveAtDestination:timeOnTransport:thisStationName-timeOfThisSplit-timeLeftThisStation-stopAtThisStation-vehicleType
         destination = dataList[1]
@@ -245,8 +245,8 @@ def udpListen(sock):
         pathHistory = dataList[4].split(",")
         arrayOfVisited = []
         for path in pathHistory:
-            arrayOfVisited.append(path[0])
-
+            arrayOfVisited.append(path.split("-")[0])
+        print(arrayOfVisited)
         # Here we construct a list of stations that have not been visited by the path and are adjacent
         arrayToBeVisited = []
         dontAdd = False
@@ -264,36 +264,72 @@ def udpListen(sock):
         haveReq = False
         for station in arrayToBeVisited: # We go through each station
             for timetableEvent in timetableDict.get(station): # We go through each time we go to that station
-                if (timetableEvent.leave >= arriveHere): # If there is one after current time, we want to catch it
+                if (timetableEvent.leave >= int(arriveHere)): # If there is one after current time, we want to catch it
                     haveReq = True
                     thisSegTime = timeDif(timetableEvent.arrive, timetableEvent.leave)
-                    thisSegment = stationName + "-" + str(thisSegTime) + "-" + timetableEvent.leave + "-" + timetableEvent.stop + "-" + timetableEvent.vehicle
+                    thisSegment = stationName + "-" + str(thisSegTime) + "-" + str(timetableEvent.leave) + "-" + timetableEvent.stop + "-" + timetableEvent.vehicle
                     # thisSegment = thisStationName-timeOfThisSplit-timeLeftThisStation-stopAtThisStation-vehicleType
                     if (station == destination): # This is the case that we have a successful trip to the destination and thus SRET
                         print("We are adjacent, sending back SRET to " + arrayOfVisited[-1])
-                        reply = "SRET:" + str(len(arrayOfVisited)-1) + ":" + destination + ":" + timetableEvent.arrive + ":" + str(int(timeTravelled) + thisSegTime) + ":" + ",".join(pathHistory) + "," + thisSegment
+                        reply = "SRET:" + str(len(arrayOfVisited)-1) + ":" + destination + ":" + str(timetableEvent.arrive) + ":" + str(int(timeTravelled) + thisSegTime) + ":" + ",".join(pathHistory) + "," + thisSegment
                         # FORMAT OF SRET REQUEST -> SRET:noStepsBack:destination:arriveAtDestination:timeOnTransport:history,thisStationName-timeOfThisSplit-timeLeftThisStation-stopAtThisStation-vehicleType
                         replyPort = adjacentStationDict.get(arrayOfVisited[-1])
                         break
                     else: # This is the case that we have a successful trip to an adjacent port and thus we send PATH req
-                        reply = "PATH:" + destination + ":" + timetableEvent.arrive + ":" + str(int(timeTravelled) + thisSegTime) + ":" + ",".join(pathHistory) + "," + thisSegment
+                        reply = "PATH:" + destination + ":" + str(timetableEvent.arrive) + ":" + str(int(timeTravelled) + thisSegTime) + ":" + ",".join(pathHistory) + "," + thisSegment
                         # FORMAT OF PATH REQUEST -> PATH:destination:arriveAtDestination:timeOnTransport:history,thisStationName-timeOfThisSplit-timeLeftThisStation-stopAtThisStation-vehicleType
                         replyPort = adjacentStationDict.get(station)
                         break
             if (haveReq == False): # This is the case that whether we were adjacent or not, we cannot find a path to keep going and thus we return failure
-                reply = "FRET:"
-            
+                reply = "FRET:" + str(len(arrayOfVisited)-1) + ":" + destination + ":" + "0" + ":" + str(24*60) + ":" + ",".join(pathHistory) + "," + stationName + "-" + str(0) + "-" + str(0) + "-NA-NA"
+                replyPort = adjacentStationDict.get(arrayOfVisited[-1])
             # We send our reply to the right person
             udpSend(replyPort, reply)
 
-    if (requestType == "RET"):
+    if (requestType[1:] == "RET"):
         # Deal with RET request
-        print("We recieved a RET request")
+        print("We recieved a RET request", dataStr)
 
-        # If we get a successful request
-        successfulReturnPath = ""
-        return True, successfulReturnPath
+        stepsLeft = dataList[1]
+        destination = dataList[2]
+        arriveHere = dataList[3]
+        timeTravelled = dataList[4]
+        pathHistory = dataList[5].split(",")
+        arrayOfVisited = []
+        for path in pathHistory:
+            arrayOfVisited.append(path.split("-")[0])
+        print(arrayOfVisited)
+        
+        if (int(stepsLeft) > 0):
+            replyMessage = dataList[0] + ":" + str(int(stepsLeft)-1) + ":" + ":".join(dataList[2:])
+            udpSend(adjacentStationDict.get(arrayOfVisited[int(stepsLeft)-1]), replyMessage)
+        else:
+            reply = "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: Closed\n\n<html>\n<body>"
+            # If we get a successful request
+            if (requestType == "SRET"):
+                print("celebrations are in order")
+                reply += "<h2>You will arrive at " + destination + ", at " + prettyTime(int(arriveHere)) + "<br>It took " + timeTravelled + " minutes (on transport) to get here<br></h2>"
+
+                for path in pathHistory:
+                    pathList = path.split("-")
+                    currStation = pathList[0]
+                    currTimeTaken = pathList[1]
+                    currLeaveHere = pathList[2]
+                    currStop = pathList[3]
+                    currVehicle = pathList[4]
+                    reply += "<p>From " + currStation + ", catch the " + currVehicle + " at " + currStop + ". Departing " + prettyTime(int(currLeaveHere)) + ", will take " + currTimeTaken + " minutes.<br></p>\n"
+            else:
+                print("depression is in order")
+                reply += "<h2>Failed path, try again tomorrow :(</h2>"
+            
+            reply += "</body>\n</html>\n"
+
+            # Reply to TCP and close
+            client = clientsAwaitingReplies.get(destination).pop(0)
+            client.send(reply.encode('utf-8'))
+            client.close()
     
+    sock.close()
     # END OF UDPLISTEN FUNC
 
 # Source: https://docs.python.org/3/howto/sockets.html

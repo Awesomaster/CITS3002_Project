@@ -1,5 +1,5 @@
 station3,-31.7,115.8
-07:55,Stop1,08:14,station1
-08:55,Stop1,09:26,station1
-15:20,Stop1,15:30,station1
-23:57,StopPlease,00:45,station1
+07:55,bus,Stop1,08:14,station1
+08:55,bus,Stop1,09:26,station1
+15:20,bus,Stop1,15:30,station1
+23:57,train,StopPlease,00:45,station1

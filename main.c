@@ -595,7 +595,7 @@ int main(int argc, char **argv) {
                             }
                             char *currStop = strtok(0, "-");
                             char *currVehicle = strtok(0, ",");
-                            snprintf(returnedStep, 100*sizeof(char), "<p>From %s, catch the %s at %s. Departing %i past %i%s, will take %i minutes.<br></p>\n", currStation, currVehicle, currStop, leaveHereMinutes, leaveHereHours, hrType, currTimeTaken);
+                            snprintf(returnedStep, 150*sizeof(char), "<p>From %s, catch the %s at %s. Departing %i past %i%s, will take %i minutes.<br></p>\n", currStation, currVehicle, currStop, leaveHereMinutes, leaveHereHours, hrType, currTimeTaken);
                             strcat(returnedSteps, returnedStep);
                             printf("WE HAVE ARRIVED AT SOURCE!!!!: all steps so far: %s\n", returnedSteps);fflush(stdout);
                             currStation = strtok(0, "-");
