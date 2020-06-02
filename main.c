@@ -279,6 +279,7 @@ int main(int argc, char **argv) {
                                     } else {
                                         sprintf(arriveHrType, "AM");
                                     }
+                                    // Add total trip time
                                     snprintf(finalResult, MAXDATASIZE*sizeof(char), "From: %s hop on %s at %s<br>To: %s<br>Leaving at: %i past %i%s<br>Arriving at: %i past %i%s", name, timetable[j].vehicle, timetable[j].stop, timetable[j].destination, leaveTimeMins, leaveTimeHours, leaveHrType, arriveTimeMinutes, arriveTimeHours, arriveHrType);
                                     break;
                                 }
