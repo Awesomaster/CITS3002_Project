@@ -1,3 +1,7 @@
+# CITS3002 Project
+# By Josh Collier
+# Written and tested in linux
+
 import datetime
 import re
 import socket
@@ -344,8 +348,8 @@ def udpListen(sock):
 # Source: https://docs.python.org/3/howto/sockets.html
 # Create TCP socket
 tcpSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-tcpSock.bind(('localhost', tcpPort));
-tcpSock.listen(1);
+tcpSock.bind(('localhost', tcpPort))
+tcpSock.listen(1)
 
 # Create UDP socket
 udpSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

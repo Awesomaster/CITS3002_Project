@@ -1,4 +1,6 @@
-// Starting code for CITS3002 in C
+// CITS3002 Project
+// By Josh Collier
+// Written and tested in linux
 
 // Headers
 #include <stdio.h>
@@ -87,7 +89,7 @@ int getTime() {
 
 int main(int argc, char **argv) {
     printf("Code is starting at %i\n", getTime());
-    ;
+    
     // Variables defined from argv
     char *name = argv[1]; // the spoken name of the station that will be used to refer to the station
     int tcpPort = atoi(argv[2]); // port for tcp connection from e.g. http://localhost:tcpport
@@ -237,8 +239,6 @@ int main(int argc, char **argv) {
                 char time[4];
                 int timeInt = getTime();
 
-                // FOR TESTING WE SET TIME EARLY TO ACTUALLY GET PATHS BECAUSE IM CODING TOO LATE
-
                 // Get time as a char* for when we need it as a str
                 snprintf(time, 4*sizeof(char), "%d", timeInt);
 
@@ -250,11 +250,9 @@ int main(int argc, char **argv) {
                 for (int i =0; i<dictionaryPosition; i++) {
                     printf("stationNameArray[i]: %s, destination: %s\n", stationNameArray[i], destinationStation);
                     if(strcmp(stationNameArray[i], destinationStation) == 0) {
-                        printf("yayy we are adjacent\n");
                         isAdjacent = 1;
                         for (int j = 0; j<timetablePos; j++) {
                             if (strcmp(timetable[j].destination, destinationStation) == 0) {
-                                printf("cur time: %i, tt time: %i\n", timeInt, timetable[j].leaveTime);
                                 if (timetable[j].leaveTime >= timeInt) {
                                     isAvaliable = 1;
                                     int leaveTimeHours = timetable[j].leaveTime/100;
@@ -294,7 +292,6 @@ int main(int argc, char **argv) {
                         snprintf(returnToTCP, MAXDATASIZE*sizeof(char)*2, "%s%s<h2>%s</h2>%s", headerResponse, htmlHeader, finalResult, goBack);
                         send(connFD, returnToTCP, strlen(returnToTCP), 0); // Send time of arrival and path of destination back to the web
                         printf("Returned: %s\n", returnToTCP);
-                        printf("Replied to TCP Connection. TCP Over.\n");
                         haveWeAccepted = 0;
                         close(connFD);
                     }
@@ -302,17 +299,13 @@ int main(int argc, char **argv) {
 
                 // Handles it if we are not adjacent
                 if (isAdjacent == 0) {
-                    printf("%s %s %s %s\n", "We", name,  "are not adjacent to the destination:", destinationStation);
                     char request[MAXDATASIZE];
                     bzero(request, sizeof(request)); // Here we make the request empty, probably not necessary
 
                     int pathAvaliable = 0;
                     for (int i = 0; i < numberOfAdjacentPorts; i++) { // We are going through all the adjacent ports
-                        printf("i: %i, station: %s\n", i, stationNameArray[i]);
                         for (int j = 0; j < timetablePos; j++) { // Checking each timetable event for any that go to the current station we are looking at
-                            printf("cur timetable dest: %s\n", timetable[j].destination);
                             if (strcmp(timetable[j].destination, stationNameArray[i]) == 0) { // We have found a timetable event that goes to this station
-                                printf("cur time: %i, tt time: %i\n", timeInt, timetable[j].leaveTime);
                                 if (timetable[j].leaveTime >= timeInt) { // Since timetable listings are in time order, we just need to find the first one that leaves after our current time
                                     pathAvaliable = 1;
                                     int onTransportTime = timetable[j].arrivalTime - timetable[j].leaveTime; // If we take the time we leave this station
@@ -406,11 +399,9 @@ int main(int argc, char **argv) {
                     for (int j = 0; j < numberOfStationsVisited; j++) { // Go through all visited ports
                         if (strcmp(arrayOfVisited[j], stationNameArray[i]) == 0) { // If it is adjacent visited then we dont add it to our array
                             badEgg = 1; // this one is has already been visited
-                            printf("%s: HERE WE HAVE THE ONE THAT IS THE SAME FOR i=%i, STATION: %s\n", name, i, stationNameArray[i]);
                         }
                     }
                     if (badEgg == 0) { // this one has not been visited
-                        printf("%s: We are adding %s to be visited\n", name, stationNameArray[i]);
                         snprintf(toBeVisitedStationNameArray[toBeVisitedArraySize], MAXNAMESIZE*sizeof(char), "%s", stationNameArray[i]);
                         toBeVisitedStationPortArray[toBeVisitedArraySize] = stationPortArray[i];
                         toBeVisitedArraySize++;
@@ -420,7 +411,6 @@ int main(int argc, char **argv) {
                 }
 
                 int amISendingPath = 0;
-                printf("%s: Stations Visitied: %i, Adjacent Ports: %i, Scuffed Array: %i\n", name, numberOfStationsVisited, numberOfAdjacentPorts, toBeVisitedArraySize);
                 if (toBeVisitedArraySize > 0) {
                     for (int i = 0; i < toBeVisitedArraySize; i++) { // We go through all of the adjacent stations that havent seen this message yet
                         for (int j = 0; j<timetablePos; j++) {
@@ -468,29 +458,22 @@ int main(int argc, char **argv) {
                         printf("%s: hasArrived before send: %i\n", name, hasArrived);
 
                         if (hasArrived == 1) { // This is a reply
-                            printf("%s: looks like we are sending back to person who sent to us %s\n", name, arrayOfVisited[numberOfStationsVisited-1]);
                             for (int k = 0; k < numberOfAdjacentPorts; k++) {
-                                printf("%s: Surely one of these %s (an adjacent) is %s\n", name, stationNameArray[k], arrayOfVisited[numberOfStationsVisited-1]);
                                 if (strcmp(arrayOfVisited[numberOfStationsVisited-1], stationNameArray[k]) == 0) {
-                                    printf("%s: passin back the footy\n", name);
                                     udpSend(stationPortArray[k], messageToPassForward); // This will pass the message back to the previous station
                                     break;
                                 }
                             }
                             hasArrived = 0;
                         } else if (amISendingPath == 1) { // This is a path request
-                            printf("%s: I should be sending a path request right now, \nHere: %s\n", name, messageToPassForward);
                             udpSend(toBeVisitedStationPortArray[i], messageToPassForward);
                             amISendingPath = 0;
                         }
-                        printf("%s: we have checked %s, now to check next adjacent station (if there is one)\n", name, toBeVisitedStationNameArray[i]);
                     }
                 } else {                                            
                     // We will start returning at this point, since we cant go any further
                     for (int i = 0; i < numberOfAdjacentPorts; i++) {
-                        printf("%s: we start FRET to %s, comparing to %s\n", name, arrayOfVisited[numberOfStationsVisited-1], stationNameArray[i]);
                         if (strcmp(stationNameArray[i],arrayOfVisited[numberOfStationsVisited-1]) == 0) {
-                            printf("%s: successfully returned failed\n", name);
                             snprintf(messageToPassForward, MAXDATASIZE*sizeof(char), "FRET:%i:%s:%i:%i:%s,%s-%i-%i-%s-%s", numberOfStationsVisited-1, destinationStation, 0, 24*60, otherStepsForReply, name, 0, 0, "NA", "NA");
                             udpSend(stationPortArray[i], messageToPassForward);
                             break;
@@ -513,7 +496,6 @@ int main(int argc, char **argv) {
                 regexCheck = regexec(&regex, buf, 0, NULL, 0); // This means the return was a success, and we will treat it accordingly
                 if (regexCheck == 0) {
                     isSuccess = 1; // If this is not the case, then it is a failure (because we will get an FRET)
-                    printf("%s: what a great sucess this is!!\n", name);
                 }
                 
                 // We dont want to be counting replies that come to us twice that are the same
@@ -533,7 +515,6 @@ int main(int argc, char **argv) {
                 printf("%s: I have recieved %i replies, and I expect %i replies\n", name, numberOfRepliesRecived, numberYouWillRecieveFrom);
                 // If we get a successful reply, we are winning, if not, we arent, oh well, but if we have got a bunch of replies, from everyone, and still no success, we give up and tell everyone that we give up      
                 if ((isSuccess == 1) || (numberOfRepliesRecived >= numberYouWillRecieveFrom)) {
-                    printf("%s: we are in\n", name);fflush(stdout);
                     char messageToPassBack[MAXDATASIZE]; // Initialising it for passing back the message
                     strtok(buf, ":"); // to get rid of the RET
                     int numberOfStationsLeft = atoi(strtok(0,":")); // This is the amount of stations visited in the return path left from this station (just added here for convinence/efficiency)
@@ -548,7 +529,6 @@ int main(int argc, char **argv) {
                     char arrayOfVisited[numberOfAdjacentPorts][MAXNAMESIZE]; // Array needed to keep track of where we have been
                     char *stationVisited = strtok(otherSteps, "-");
                     int numberOfStationsVisited = 0;
-                    printf("%s: endering\n", name);fflush(stdout);
                     while (stationVisited != NULL) {
                         snprintf(arrayOfVisited[numberOfStationsVisited], MAXNAMESIZE*sizeof(char), "%s", stationVisited);
                         strtok(0,","); //go to next station
@@ -578,7 +558,6 @@ int main(int argc, char **argv) {
                         bzero(returnedSteps, sizeof(returnedSteps));
                         char *otherStepsFinalCopy = strdup(otherStepsForReply);
                         char *currStation = strtok(otherStepsFinalCopy, "-");
-                        printf("WE HAVE ARRIVED AT SOURCE!!!!: currStation: %s", currStation);fflush(stdout);
                         while (currStation != NULL) {
                             int currTimeTaken = atoi(strtok(0, "-"));
                             int currLeaveHere = atoi(strtok(0, "-"));
@@ -597,7 +576,6 @@ int main(int argc, char **argv) {
                             char *currVehicle = strtok(0, ",");
                             snprintf(returnedStep, 150*sizeof(char), "<p>From %s, catch the %s at %s. Departing %i past %i%s, will take %i minutes.<br></p>\n", currStation, currVehicle, currStop, leaveHereMinutes, leaveHereHours, hrType, currTimeTaken);
                             strcat(returnedSteps, returnedStep);
-                            printf("WE HAVE ARRIVED AT SOURCE!!!!: all steps so far: %s\n", returnedSteps);fflush(stdout);
                             currStation = strtok(0, "-");
                         }
 
